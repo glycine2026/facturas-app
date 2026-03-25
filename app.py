@@ -8,22 +8,21 @@ st.set_page_config(page_title="Portal de Facturas", layout="wide")
 st.title("📄 Portal de Facturas de Proveedores")
 
 cuit = st.text_input("Ingresá tu CUIT")
-filtro_factura = st.text_input("Buscar por número de factura")
 
 
-# 🔥 DETECTOR UNIVERSAL DE ESTADO
+# 🔥 DETECTOR COMPLETO DE ESTADOS
 def detectar_estado(cols):
-    posibles_estados = []
+    posibles = []
 
-    for key, value in cols.items():
+    for value in cols.values():
 
-        # Caso string directo
+        # string directo
         if isinstance(value, str):
-            posibles_estados.append(value)
+            posibles.append(value)
 
-        # Caso dict
-        if isinstance(value, dict):
-            posibles_estados.extend([
+        # dict (estructura monday)
+        elif isinstance(value, dict):
+            posibles.extend([
                 value.get("text"),
                 value.get("label"),
                 value.get("additional_info", {}).get("label"),
@@ -31,35 +30,42 @@ def detectar_estado(cols):
             ])
 
     # limpiar
-    posibles_estados = [e for e in posibles_estados if isinstance(e, str) and e.strip()]
+    posibles = [p.strip() for p in posibles if isinstance(p, str) and p.strip()]
 
-    # 🔥 priorizar estados conocidos
-    for estado in posibles_estados:
+    # mapa oficial
+    MAP_ESTADOS = {
+        "pendiente": "Pendiente",
+        "rechazada": "Rechazada",
+        "ingresada": "Ingresada",
+        "cancelada": "Cancelada",
+        "enviada": "Enviada",
+        "downloaded": "Pendiente",
+        "demorado (interno)": "Demorado (Interno)",
+        "pendiente descarga": "Pendiente Descarga",
+        "demorado (externo)": "Demorado (Externo)",
+    }
+
+    for estado in posibles:
         e = estado.lower()
 
-        if "pendiente" in e:
-            return "Pendiente"
-        if "enviada" in e:
-            return "Enviada"
-        if "ingresada" in e:
-            return "Ingresada"
-        if "rechazada" in e:
-            return "Rechazada"
-        if "downloaded" in e:
-            return "Pendiente"
+        for key, valor in MAP_ESTADOS.items():
+            if key in e:
+                return valor
 
-    # fallback
-    return posibles_estados[0] if posibles_estados else ""
+    return posibles[0] if posibles else ""
 
 
+# 🔥 FECHA ÚLTIMO ESTADO
 def obtener_fecha_estado(cols):
-    for key, value in cols.items():
+    for value in cols.values():
         if isinstance(value, dict):
-            if value.get("text") and "202" in str(value.get("text")):
-                return value.get("text")
+            text = value.get("text")
+            if text and "202" in str(text):
+                return text
     return ""
 
 
+# 🚀 BOTÓN PRINCIPAL
 if st.button("Buscar facturas"):
 
     if not cuit:
@@ -84,10 +90,8 @@ if st.button("Buscar facturas"):
             for f in facturas:
                 cols = f.get("mappable_column_values", {})
 
-                fecha_carga = cols.get("date", {}).get("text")
-
                 rows.append({
-                    "Fecha carga": fecha_carga,
+                    "Fecha carga": cols.get("date", {}).get("text"),
                     "Fecha estado": obtener_fecha_estado(cols),
                     "Factura": f.get("name"),
                     "CUIT": cols.get("numeric_mknyacxz"),
@@ -97,13 +101,16 @@ if st.button("Buscar facturas"):
 
             df = pd.DataFrame(rows)
 
-            # 🔍 filtro por factura
-            if filtro_factura:
-                df = df[df["Factura"].astype(str).str.contains(filtro_factura)]
-
             if df.empty:
                 st.warning("No se encontraron facturas")
             else:
+                # 🔍 buscador aparece DESPUÉS
+                filtro_factura = st.text_input("Buscar por número de factura")
+
+                if filtro_factura:
+                    df = df[df["Factura"].astype(str).str.contains(filtro_factura)]
+
+                # ordenar por fecha
                 df = df.sort_values(by="Fecha carga", ascending=False)
 
                 st.success(f"{len(df)} factura(s) encontrada(s)")
