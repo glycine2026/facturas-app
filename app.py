@@ -23,13 +23,16 @@ if st.button("Buscar facturas"):
                 json={"cuit": cuit}
             )
 
+            # 🔍 DEBUG (por si algo falla)
+            if response.status_code != 200:
+                st.error(f"Error HTTP: {response.status_code}")
+                st.write(response.text)
+                st.stop()
+
             data = response.json()
 
-            # Puede venir como objeto o lista
-            if isinstance(data, list):
-                facturas = data
-            else:
-                facturas = [data]
+            # 🔥 CLAVE: usar "array" (salida del aggregator)
+            facturas = data.get("array", [])
 
             rows = []
 
@@ -40,7 +43,7 @@ if st.button("Buscar facturas"):
                     "Factura": f.get("name"),
                     "CUIT": cols.get("numeric_mknyacxz"),
                     "Mail": cols.get("lookup_mkszyw7y"),
-                    "Estado": cols.get("status"),
+                    "Estado": cols.get("status") or cols.get("color_mkv8nqvv"),
                     "Fecha carga": cols.get("date", {}).get("text")
                 })
 
@@ -53,4 +56,5 @@ if st.button("Buscar facturas"):
                 st.dataframe(df, use_container_width=True)
 
         except Exception as e:
-            st.error(f"Error al consultar: {e}")
+            st.error("Error al procesar la respuesta")
+            st.write(str(e))
