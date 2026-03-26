@@ -2,23 +2,28 @@ import streamlit as st
 import requests
 import pandas as pd
 
-WEBHOOK_URL = "https://hook.us2.make.com/n0wfd9ahdtcvw7jsg8tt1l5g0kk6wkdo"
+# 🔗 WEBHOOKS
+WEBHOOK_FACTURAS = "https://hook.us2.make.com/n0wfd9ahdtcvw7jsg8tt1l5g0kk6wkdo"
+WEBHOOK_GENERAR_TOKEN = "https://hook.us2.make.com/pge18s5nwbpciprxph4o1yokco3aehne"
+WEBHOOK_VALIDAR_TOKEN = "https://hook.us2.make.com/u8d830syq846gmavpbol11lo4qrvca60"
 
 st.set_page_config(page_title="Portal de Facturas", layout="wide")
 st.title("📄 Portal de Facturas de Proveedores")
 
-cuit = st.text_input("Ingresá tu CUIT")
+
+# 🔐 SESSION
+if "autenticado" not in st.session_state:
+    st.session_state.autenticado = False
+    st.session_state.cuit = None
 
 
-# 🔥 DETECTOR DE ESTADO (CON PRIORIDADES)
+# 🔥 ESTADO
 def detectar_estado(cols):
     posibles = []
 
     for value in cols.values():
-
         if isinstance(value, str):
             posibles.append(value)
-
         elif isinstance(value, dict):
             posibles.extend([
                 value.get("text"),
@@ -29,7 +34,6 @@ def detectar_estado(cols):
 
     posibles = [p.strip().lower() for p in posibles if isinstance(p, str) and p.strip()]
 
-    # 🔥 prioridad correcta
     prioridades = [
         ("enviada", "Enviada"),
         ("rechazada", "Rechazada"),
@@ -50,7 +54,7 @@ def detectar_estado(cols):
     return posibles[0] if posibles else ""
 
 
-# 🔥 FECHA DE ÚLTIMO ESTADO
+# 🔥 FECHA ESTADO
 def obtener_fecha_estado(cols):
     for value in cols.values():
         if isinstance(value, dict):
@@ -60,22 +64,71 @@ def obtener_fecha_estado(cols):
     return ""
 
 
-# 🚀 BOTÓN
-if st.button("Buscar facturas"):
+# ===============================
+# 🔐 LOGIN
+# ===============================
 
-    if not cuit:
-        st.warning("Ingresá un CUIT")
-    else:
+if not st.session_state.autenticado:
+
+    st.subheader("🔐 Ingreso")
+
+    cuit_input = st.text_input("Ingresá tu CUIT")
+
+    if st.button("Enviar código"):
+        if cuit_input:
+            try:
+                requests.post(WEBHOOK_GENERAR_TOKEN, json={"cuit": cuit_input})
+                st.success("📧 Código enviado por mail")
+                st.session_state.cuit = cuit_input
+            except:
+                st.error("Error al enviar código")
+
+    token_input = st.text_input("Ingresá el código")
+
+    if st.button("Validar código"):
         try:
             response = requests.post(
-                WEBHOOK_URL,
-                json={"cuit": cuit}
+                WEBHOOK_VALIDAR_TOKEN,
+                json={
+                    "cuit": st.session_state.cuit,
+                    "token": token_input
+                }
             )
 
-            if response.status_code != 200:
-                st.error(f"Error HTTP: {response.status_code}")
-                st.write(response.text)
-                st.stop()
+            data = response.json()
+
+            if data.get("valid"):
+                st.session_state.autenticado = True
+                st.success("✅ Acceso concedido")
+                st.rerun()
+            else:
+                st.error("❌ Código incorrecto")
+
+        except Exception as e:
+            st.error("Error validando token")
+            st.write(str(e))
+
+
+# ===============================
+# 📄 FACTURAS
+# ===============================
+
+else:
+
+    st.success(f"Conectado como CUIT: {st.session_state.cuit}")
+
+    if st.button("Cerrar sesión"):
+        st.session_state.autenticado = False
+        st.session_state.cuit = None
+        st.rerun()
+
+    if st.button("Buscar facturas"):
+
+        try:
+            response = requests.post(
+                WEBHOOK_FACTURAS,
+                json={"cuit": st.session_state.cuit}
+            )
 
             data = response.json()
             facturas = data.get("array", [])
@@ -99,13 +152,11 @@ if st.button("Buscar facturas"):
             if df.empty:
                 st.warning("No se encontraron facturas")
             else:
-                # 🔍 buscador aparece después
-                filtro_factura = st.text_input("Buscar por número de factura")
+                filtro = st.text_input("Buscar por factura")
 
-                if filtro_factura:
-                    df = df[df["Factura"].astype(str).str.contains(filtro_factura)]
+                if filtro:
+                    df = df[df["Factura"].astype(str).str.contains(filtro)]
 
-                # ordenar por fecha
                 df = df.sort_values(by="Fecha carga", ascending=False)
 
                 st.success(f"{len(df)} factura(s) encontrada(s)")
