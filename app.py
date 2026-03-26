@@ -10,17 +10,15 @@ st.title("📄 Portal de Facturas de Proveedores")
 cuit = st.text_input("Ingresá tu CUIT")
 
 
-# 🔥 DETECTOR COMPLETO DE ESTADOS
+# 🔥 DETECTOR DE ESTADO (CON PRIORIDADES)
 def detectar_estado(cols):
     posibles = []
 
     for value in cols.values():
 
-        # string directo
         if isinstance(value, str):
             posibles.append(value)
 
-        # dict (estructura monday)
         elif isinstance(value, dict):
             posibles.extend([
                 value.get("text"),
@@ -29,33 +27,30 @@ def detectar_estado(cols):
                 value.get("additonal_info", {}).get("label"),
             ])
 
-    # limpiar
-    posibles = [p.strip() for p in posibles if isinstance(p, str) and p.strip()]
+    posibles = [p.strip().lower() for p in posibles if isinstance(p, str) and p.strip()]
 
-    # mapa oficial
-    MAP_ESTADOS = {
-        "pendiente": "Pendiente",
-        "rechazada": "Rechazada",
-        "ingresada": "Ingresada",
-        "cancelada": "Cancelada",
-        "enviada": "Enviada",
-        "downloaded": "Pendiente",
-        "demorado (interno)": "Demorado (Interno)",
-        "pendiente descarga": "Pendiente Descarga",
-        "demorado (externo)": "Demorado (Externo)",
-    }
+    # 🔥 prioridad correcta
+    prioridades = [
+        ("enviada", "Enviada"),
+        ("rechazada", "Rechazada"),
+        ("cancelada", "Cancelada"),
+        ("ingresada", "Ingresada"),
+        ("pendiente descarga", "Pendiente Descarga"),
+        ("demorado (interno)", "Demorado (Interno)"),
+        ("demorado (externo)", "Demorado (Externo)"),
+        ("pendiente", "Pendiente"),
+        ("downloaded", "Pendiente"),
+    ]
 
-    for estado in posibles:
-        e = estado.lower()
-
-        for key, valor in MAP_ESTADOS.items():
-            if key in e:
+    for key, valor in prioridades:
+        for estado in posibles:
+            if key in estado:
                 return valor
 
     return posibles[0] if posibles else ""
 
 
-# 🔥 FECHA ÚLTIMO ESTADO
+# 🔥 FECHA DE ÚLTIMO ESTADO
 def obtener_fecha_estado(cols):
     for value in cols.values():
         if isinstance(value, dict):
@@ -65,7 +60,7 @@ def obtener_fecha_estado(cols):
     return ""
 
 
-# 🚀 BOTÓN PRINCIPAL
+# 🚀 BOTÓN
 if st.button("Buscar facturas"):
 
     if not cuit:
@@ -104,7 +99,7 @@ if st.button("Buscar facturas"):
             if df.empty:
                 st.warning("No se encontraron facturas")
             else:
-                # 🔍 buscador aparece DESPUÉS
+                # 🔍 buscador aparece después
                 filtro_factura = st.text_input("Buscar por número de factura")
 
                 if filtro_factura:
